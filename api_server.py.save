@@ -1,0 +1,191 @@
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from dotenv import load_dotenv
+import os
+from datetime import datetime, timedelta
+
+# Import your real agent functions
+from calendar_assistant import (
+    get_next_event,
+    get_calendar_service,
+    search_emails,
+    send_email,  # Should actually send
+    accept_meeting,  # Should actually accept/decline
+    store_email_pattern,
+    get_pattern_count,
+    supabase
+)
+
+# Load environment variables
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+
+# --- Helper functions ---
+
+def get_calendar_attendees():
+    service = get_calendar_service()
+    event = get_next_event(service)
+    if not event:
+        return set()
+    attendees = event.get('attendees', [])
+    return set(a.get('email') for a in attendees if a.get('email'))
+
+def has_revenue_keywords(email):
+    keywords = ["contract", "pricing", "proposal", "deal"]
+    text = (email.get('subject', '') + ' ' + email.get('body_summary', '')).lower()
+    return any(k in text for k in keywords)
+
+def extract_company(sender_email):
+    # Simple extraction: domain before .com
+    if '@' in sender_email:
+        domain = sender_email.split('@')[1]
+        return domain.split('.')[0].capitalize()
+    return "Unknown"
+
+def extract_deal_amount(email):
+    # Try to extract $ or £ amounts from subject/body
+    import re
+    text = email.get('subject', '') + ' ' + email.get('body_summary', '')
+    match = re.search(r'[$£€](\d+[\d,]*)', text)
+    if match:
+        return int(match.group(1).replace(',', ''))
+    return None
+
+def estimate_deal_size(sender_email):
+    # Placeholder: could use historical data
+    return 50000
+
+def determine_stage(email):
+    # Simple: look for stage keywords
+    text = (email.get('subject', '') + ' ' + email.get('body_summary', '')).lower()
+    if 'signed' in text or 'closed' in text:
+        return 'closed'
+    if 'proposal' in text:
+        return 'proposal'
+    if 'negotiation' in text:
+        return 'negotiation'
+    return 'discovery'
+
+def generate_response(email):
+    return f"Reply to {email.get('sender', '')}: {email.get('subject', '')[:40]}..."
+
+def calculate_confidence(email):
+    # Placeholder: use pattern matching or ML
+    return 0.95
+
+def get_dashboard_data():
+    # Revenue pipeline from Supabase
+    opps = []
+    recent_emails = fetch_recent_emails(get_gmail_service(), hours=72)
+    calendar_contacts = get_calendar_attendees()
+    for email in recent_emails:
+        if email.get('sender') in calendar_contacts and has_revenue_keywords(email):
+            opps.append({
+                "id": email.get('message_id', ''),
+                "company": extract_company(email.get('sender', '')),
+                "amount": extract_deal_amount(email) or estimate_deal_size(email.get('sender', '')),
+                "stage": determine_stage(email),
+                "action_preview": generate_response(email),
+                "confidence": calculate_confidence(email)
+            })
+    # Days runway from Supabase metrics
+    runway = 47
+    try:
+        metrics = supabase.table('business_metrics').select('runway_days').execute().data
+        if metrics and 'runway_days' in metrics[0]:
+            runway = metrics[0]['runway_days']
+    except Exception:
+        pass
+    # Pending actions
+    pending = supabase.table('email_drafts').select('id').execute().data
+    pending_count = len(pending) if pending else 0
+    # Time allocation
+    today = datetime.now().date()
+    cal_service = get_calendar_service()
+    events = cal_service.events().list(calendarId='primary', timeMin=f"{today}T00:00:00Z", timeMax=f"{today}T23:59:59Z", singleEvents=True, orderBy='startTime').execute().get('items', [])
+    rev, ops, other = 0, 0, 0
+    for e in events:
+        summary = e.get('summary', '').lower()
+        if any(k in summary for k in ['demo', 'customer', 'deal', 'sales', 'revenue']):
+            rev += 1
+        elif any(k in summary for k in ['internal', 'team', 'ops', 'admin']):
+            ops += 1
+        else:
+            other += 1
+    total = rev + ops + other or 1
+    time_allocation = {
+        "revenue_percentage": int(100 * rev / total),
+        "target_percentage": 80
+    }
+    return {
+        "metrics": {
+            "revenue_pipeline": sum(o['amount'] for o in opps),
+            "days_runway": runway,
+            "actions_needed": pending_count
+        },
+        "opportunities": opps,
+        "time_allocation": time_allocation
+    }
+
+def get_pending_actions():
+    # Combine email, calendar, slack drafts from Supabase
+    emails = supabase.table('email_drafts').select('*').execute().data or []
+    cals = supabase.table('calendar_actions_pending').select('*').execute().data or []
+    slacks = supabase.table('slack_drafts').select('*').execute().data or []
+    return emails + cals + slacks
+
+def execute_action(action_id):
+    # Find action in Supabase
+    action = None
+    for table in ['email_drafts', 'calendar_actions_pending']:
+        res = supabase.table(table).select('*').eq('id', action_id).execute().data
+        if res:
+            action = res[0]
+            break
+    if not action:
+        return {"status": "not_found", "id": action_id}
+    if action.get('type') == 'email':
+        send_email(action['to'], action['subject'], action['body'], confidence_score=action.get('confidence_score', 0), action_reason=action.get('action_reason', ''))
+    elif action.get('type') == 'calendar':
+        accept_meeting(action.get('meeting_id'), accept=True)
+    # Log execution
+    supabase.table('executed_actions').insert({"action_id": action_id, "executed_at": datetime.now().isoformat()}).execute()
+    return {"status": "executed", "id": action_id, "message": "Action executed! 🚀"}
+
+@app.route('/api/dashboard', methods=['GET'])
+def api_dashboard():
+    return jsonify(get_dashboard_data())
+
+@app.route('/api/actions/pending', methods=['GET'])
+def api_actions_pending():
+    return jsonify({"pending_actions": get_pending_actions()})
+
+@app.route('/api/actions/execute', methods=['POST'])
+def api_actions_execute():
+    data = request.json
+    action_id = data.get('id')
+    return jsonify(execute_action(action_id))
+
+@app.route('/api/actions/edit', methods=['POST'])
+def api_actions_edit():
+    data = request.json
+    action_id = data.get('id')
+    # For now, just return the action details
+    for table in ['email_drafts', 'calendar_actions_pending', 'slack_drafts']:
+        res = supabase.table(table).select('*').eq('id', action_id).execute().data
+        if res:
+            return jsonify(res[0])
+    return jsonify({"status": "not_found", "id": action_id})
+
+@app.route('/api/patterns/learn', methods=['POST'])
+def learn_pattern():
+    data = request.json
+    original_email = data.get('original_email')
+    my_response = data.get('response')
+    store_email_pattern(original_email, my_response)
+    return jsonify({"learned": True, "patterns_count": get_pattern_count()})
+
+if __name__ == '__main__':
+    app.run(port=5000, debug=True) 

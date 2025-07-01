@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chief of Staff Dashboard</title>
+</head>
+<body>
+    <h1>Chief of Staff Dashboard</h1>
+    <div id="insights">Loading insights...</div>
+    
+    <script>
+        fetch('/api/dashboard')
+            .then(response => response.json())
+            .then(data => {
+                const insightsDiv = document.getElementById('insights');
+                if (data.opportunities && data.opportunities.length > 0) {
+                    insightsDiv.innerHTML = '<h2>Insights:</h2>';
+                    data.opportunities.forEach(opp => {
+                        insightsDiv.innerHTML += `
+                            <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
+                                <h3>${opp.company}</h3>
+                                <p>${opp.action_preview}</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    insightsDiv.innerHTML = '<p>No insights available. Run the analysis first.</p>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('insights').innerHTML = 'Error loading insights: ' + error;
+            });
+    </script>
+</body>
+</html>
