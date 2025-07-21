@@ -1,34 +1,1053 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Chief of Staff Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Ambient background */
+        .ambient-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 80%, rgba(0, 100, 255, 0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(0, 255, 150, 0.08) 0%, transparent 50%);
+            animation: pulse 12s ease-in-out infinite alternate;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            100% { opacity: 0.2; }
+        }
+
+        /* Main container */
+        .container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .container.panel-open {
+            margin-right: 50%;
+        }
+
+        /* Header */
+        .header {
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 200;
+            letter-spacing: 4px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .settings-icon {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.5);
+            transition: all 0.2s ease;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .settings-icon:hover {
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: breathe 3s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Main content area */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0 30px;
+            overflow: hidden;
+        }
+
+        /* Welcome state */
+        .welcome {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .welcome h1 {
+            font-size: 48px;
+            font-weight: 100;
+            margin-bottom: 40px;
+            letter-spacing: 3px;
+        }
+
+        .suggestions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .suggestion {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            user-select: none;
+            pointer-events: auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .suggestion:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .suggestion:active {
+            transform: translateY(0);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Chat area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            overflow-y: auto;
+        }
+
+        .chat-message {
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 80%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .chat-message.jarvis {
+            background: rgba(0, 100, 255, 0.1);
+            border: 1px solid rgba(0, 100, 255, 0.2);
+            margin-right: auto;
+        }
+
+        .chat-message.user {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-left: auto;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Proactive insights */
+        .insights-container {
+            margin-top: 15px;
+        }
+
+        .insight-tab {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .insight-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .insight-tab.urgent {
+            border-color: rgba(255, 100, 100, 0.3);
+            background: rgba(255, 100, 100, 0.05);
+        }
+
+        .insight-tab.opportunity {
+            border-color: rgba(0, 255, 150, 0.3);
+            background: rgba(0, 255, 150, 0.05);
+        }
+
+        .insight-title {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .insight-content {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Input area */
+        .input-area {
+            padding: 20px 0 30px;
+            position: relative;
+        }
+
+        .input-container {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            padding: 16px 60px 16px 24px;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .input-container:focus-within {
+            border-color: rgba(0, 100, 255, 0.4);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .chat-input {
+            background: none;
+            border: none;
+            outline: none;
+            color: #fff;
+            width: 100%;
+            font-size: 15px;
+            resize: none;
+            min-height: 20px;
+            max-height: 100px;
+            line-height: 1.4;
+        }
+
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .send-button {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .send-button:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Settings panel */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            left: -400px;
+            width: 400px;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.95);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 200;
+            overflow-y: auto;
+        }
+
+        .settings-panel.open {
+            left: 0;
+        }
+
+        .settings-header {
+            padding: 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .settings-title {
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .close-settings {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .close-settings:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .settings-content {
+            padding: 30px;
+        }
+
+        .settings-section {
+            margin-bottom: 40px;
+        }
+
+        .section-header {
+            font-size: 18px;
+            font-weight: 400;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .personality-trait {
+            margin-bottom: 30px;
+        }
+
+        .trait-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .trait-name {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .trait-value {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+        }
+
+        .trait-slider-container {
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        .trait-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .trait-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: 2px solid rgba(0, 100, 255, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .trait-slider::-webkit-slider-thumb:hover {
+            border-color: rgba(0, 100, 255, 0.6);
+            transform: scale(1.1);
+        }
+
+        .trait-description {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.4;
+        }
+
+        .personality-preview {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .preview-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .preview-text {
+            font-size: 13px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.7);
+            font-style: italic;
+        }
+
+        .settings-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .settings-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .settings-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .settings-btn.primary {
+            background: rgba(0, 100, 255, 0.2);
+            border-color: rgba(0, 100, 255, 0.4);
+        }
+
+        .settings-btn.primary:hover {
+            background: rgba(0, 100, 255, 0.3);
+            border-color: rgba(0, 100, 255, 0.6);
+        }
+
+        .settings-btn.secondary {
+            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .settings-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Thinking process display */
+        .thinking-process {
+            margin-top: 15px;
+            background: rgba(0, 100, 255, 0.05);
+            border: 1px solid rgba(0, 100, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .thinking-step {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            border-left: 3px solid rgba(0, 100, 255, 0.5);
+        }
+
+        .thinking-step-header {
+            font-weight: 500;
+            color: rgba(0, 100, 255, 0.8);
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .thinking-step-content {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.4;
+        }
+
+        .self-evaluation {
+            margin-top: 10px;
+            background: rgba(0, 255, 150, 0.05);
+            border: 1px solid rgba(0, 255, 150, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .evaluation-header {
+            font-weight: 500;
+            color: rgba(0, 255, 150, 0.8);
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .evaluation-metrics {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+
+        .evaluation-metric {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+
+        .metric-label {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 2px;
+        }
+
+        .metric-value {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main {
+                padding: 0 20px;
+            }
+            
+            .welcome h1 {
+                font-size: 36px;
+            }
+
+            .settings-panel {
+                width: 100%;
+                left: -100%;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Chief of Staff Dashboard</h1>
-    <div id="insights">Loading insights...</div>
+    <div class="ambient-bg"></div>
     
+    <div class="container">
+        <header class="header">
+            <div class="logo">JARVIS</div>
+            <div class="header-right">
+                <div class="settings-icon" onclick="openSettings()" title="Personality Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.82,11.69,4.82,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                    </svg>
+                </div>
+                <div class="status">
+                    <div class="status-dot"></div>
+                    <span>Active</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="welcome" id="welcomeScreen">
+                <h1>Good evening</h1>
+                <div class="suggestions">
+                    <div class="suggestion" id="btn1">Analyze my day</div>
+                    <div class="suggestion" id="btn2">What's urgent</div>
+                    <div class="suggestion" id="btn3">Optimize everything</div>
+                </div>
+            </div>
+
+            <div class="chat-area" id="chatArea" style="display: none;">
+                <!-- Chat messages will appear here -->
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <textarea 
+                        class="chat-input" 
+                        id="chatInput"
+                        placeholder="What would you like me to do?"
+                        rows="1"
+                    ></textarea>
+                    <button class="send-button" onclick="sendMessage()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-header">
+                <div class="settings-title">Personality Settings</div>
+                <button class="close-settings" onclick="closeSettings()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="settings-content">
+                <div class="settings-section">
+                    <div class="section-header">Core Personality Traits</div>
+                    
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Openness</span>
+                            <span class="trait-value" id="openness-value">50%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="50" class="trait-slider" id="openness" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Controls curiosity, creativity, and willingness to explore new ideas vs preference for routine and conventional approaches.
+                        </div>
+                    </div>
+
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Conscientiousness</span>
+                            <span class="trait-value" id="conscientiousness-value">80%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="80" class="trait-slider" id="conscientiousness" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Determines attention to detail, organization, and follow-through vs flexibility and spontaneity.
+                        </div>
+                    </div>
+
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Extraversion</span>
+                            <span class="trait-value" id="extraversion-value">30%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="30" class="trait-slider" id="extraversion" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Influences communication style: proactive and conversational vs reserved and concise.
+                        </div>
+                    </div>
+
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Agreeableness</span>
+                            <span class="trait-value" id="agreeableness-value">70%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="70" class="trait-slider" id="agreeableness" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Affects tone: supportive and accommodating vs direct and challenging.
+                        </div>
+                    </div>
+
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Neuroticism</span>
+                            <span class="trait-value" id="neuroticism-value">20%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="20" class="trait-slider" id="neuroticism" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Controls urgency and concern level: cautious and alert vs calm and confident.
+                        </div>
+                    </div>
+
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Formality</span>
+                            <span class="trait-value" id="formality-value">40%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="40" class="trait-slider" id="formality" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Determines communication style: professional and structured vs casual and conversational.
+                        </div>
+                    </div>
+
+                    <div class="personality-trait">
+                        <div class="trait-label">
+                            <span class="trait-name">Humor</span>
+                            <span class="trait-value" id="humor-value">25%</span>
+                        </div>
+                        <div class="trait-slider-container">
+                            <input type="range" min="0" max="100" value="25" class="trait-slider" id="humor" oninput="updatePersonality()">
+                        </div>
+                        <div class="trait-description">
+                            Controls use of wit, playfulness, and levity vs serious and straightforward communication.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="personality-preview">
+                    <div class="preview-title">Personality Preview</div>
+                    <div class="preview-text" id="personalityPreview">
+                        "Good evening. I've completed my analysis and identified several optimization opportunities. Shall we proceed with the recommended adjustments?"
+                    </div>
+                </div>
+
+                <div class="settings-actions">
+                    <button class="settings-btn primary" onclick="savePersonality()">Save Settings</button>
+                    <button class="settings-btn secondary" onclick="resetPersonality()">Reset to Default</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        fetch('/api/dashboard')
-            .then(response => response.json())
-            .then(data => {
-                const insightsDiv = document.getElementById('insights');
-                if (data.opportunities && data.opportunities.length > 0) {
-                    insightsDiv.innerHTML = '<h2>Insights:</h2>';
-                    data.opportunities.forEach(opp => {
-                        insightsDiv.innerHTML += `
-                            <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
-                                <h3>${opp.company}</h3>
-                                <p>${opp.action_preview}</p>
-                            </div>
-                        `;
-                    });
-                } else {
-                    insightsDiv.innerHTML = '<p>No insights available. Run the analysis first.</p>';
+        // Default personality values
+        const defaultPersonality = {
+            openness: 50,
+            conscientiousness: 80,
+            extraversion: 30,
+            agreeableness: 70,
+            neuroticism: 20,
+            formality: 40,
+            humor: 25
+        };
+
+        let currentPersonality = {...defaultPersonality};
+
+        // API base URL
+        const API_BASE = 'http://127.0.0.1:5000';
+
+        // Simple functions without debug messages
+        function openSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.add('open');
+        }
+
+        function closeSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.remove('open');
+        }
+
+        async function handleSuggestion(type) {
+            showChatArea();
+            addUserMessage(type);
+            
+            // Send to Jarvis API
+            const response = await sendToJarvis(type);
+            addJarvisMessage(response);
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (message) {
+                showChatArea();
+                addUserMessage(message);
+                
+                // Send to Jarvis API
+                const response = await sendToJarvis(message);
+                addJarvisMessage(response);
+                
+                input.value = '';
+                input.style.height = 'auto';
+            }
+        }
+
+        async function sendToJarvis(message) {
+            try {
+                const response = await fetch(`${API_BASE}/api/jarvis/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: message,
+                        personality: currentPersonality
+                    })
+                });
+                
+                return await response.json();
+            } catch (error) {
+                console.error('Error sending message to Jarvis:', error);
+                return {
+                    message: "I apologize, but I'm experiencing some technical difficulties. Please try again.",
+                    type: "error",
+                    proactive_insights: []
+                };
+            }
+        }
+
+        function showChatArea() {
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('chatArea').style.display = 'flex';
+        }
+
+        function addUserMessage(message) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message user';
+            messageDiv.textContent = message;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function addJarvisMessage(response) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message jarvis';
+            
+            let content = response.message;
+            
+            // Add thinking process if available
+            if (response.thinking_process && response.thinking_process.thinking_steps) {
+                content += '<div class="thinking-process">';
+                content += '<div style="font-weight: 500; margin-bottom: 10px; color: rgba(0, 100, 255, 0.8);">🤔 Jarvis is thinking...</div>';
+                
+                response.thinking_process.thinking_steps.forEach(step => {
+                    content += `
+                        <div class="thinking-step">
+                            <div class="thinking-step-header">Step ${step.step}: ${step.thought}</div>
+                            <div class="thinking-step-content">${step.analysis.ceo_insight || 'Analysis completed'}</div>
+                        </div>
+                    `;
+                });
+                content += '</div>';
+            }
+            
+            // Add self-evaluation if available
+            if (response.self_evaluation) {
+                const eval_data = response.self_evaluation;
+                content += '<div class="self-evaluation">';
+                content += '<div class="evaluation-header">✅ Self-Evaluation Complete</div>';
+                content += '<div class="evaluation-metrics">';
+                
+                if (eval_data.thinking_quality) {
+                    content += `
+                        <div class="evaluation-metric">
+                            <div class="metric-label">Thinking Quality</div>
+                            <div class="metric-value">${eval_data.thinking_quality.comprehensiveness}</div>
+                        </div>
+                    `;
                 }
-            })
-            .catch(error => {
-                document.getElementById('insights').innerHTML = 'Error loading insights: ' + error;
+                
+                if (eval_data.executive_confidence) {
+                    content += `
+                        <div class="evaluation-metric">
+                            <div class="metric-label">Executive Confidence</div>
+                            <div class="metric-value">${(eval_data.executive_confidence.decision_confidence * 100).toFixed(0)}%</div>
+                        </div>
+                    `;
+                }
+                
+                if (eval_data.action_effectiveness) {
+                    content += `
+                        <div class="evaluation-metric">
+                            <div class="metric-label">Actions Taken</div>
+                            <div class="metric-value">${eval_data.action_effectiveness.immediate_actions}</div>
+                        </div>
+                    `;
+                }
+                
+                content += '</div></div>';
+            }
+            
+            // Add proactive insights if available
+            if (response.proactive_insights && response.proactive_insights.length > 0) {
+                content += '<div class="insights-container">';
+                response.proactive_insights.forEach(insight => {
+                    content += `
+                        <div class="insight-tab ${insight.type}" onclick="handleInsight('${insight.action}', ${JSON.stringify(insight.data)})">
+                            <div class="insight-title">${insight.title}</div>
+                            <div class="insight-content">${insight.content}</div>
+                        </div>
+                    `;
+                });
+                content += '</div>';
+            }
+            
+            messageDiv.innerHTML = content;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function handleInsight(action, data) {
+            console.log('Handling insight:', action, data);
+            // Handle different insight actions
+            switch(action) {
+                case 'review_emails':
+                    addUserMessage('Show me the urgent emails');
+                    break;
+                case 'show_meetings':
+                    addUserMessage('What meetings do I have today?');
+                    break;
+                case 'show_opportunities':
+                    addUserMessage('Tell me about the business opportunities');
+                    break;
+                default:
+                    addUserMessage('Tell me more about this');
+            }
+        }
+
+        function updatePersonality() {
+            // Get values from sliders
+            currentPersonality = {
+                openness: parseInt(document.getElementById('openness').value),
+                conscientiousness: parseInt(document.getElementById('conscientiousness').value),
+                extraversion: parseInt(document.getElementById('extraversion').value),
+                agreeableness: parseInt(document.getElementById('agreeableness').value),
+                neuroticism: parseInt(document.getElementById('neuroticism').value),
+                formality: parseInt(document.getElementById('formality').value),
+                humor: parseInt(document.getElementById('humor').value)
+            };
+
+            // Update display values
+            document.getElementById('openness-value').textContent = currentPersonality.openness + '%';
+            document.getElementById('conscientiousness-value').textContent = currentPersonality.conscientiousness + '%';
+            document.getElementById('extraversion-value').textContent = currentPersonality.extraversion + '%';
+            document.getElementById('agreeableness-value').textContent = currentPersonality.agreeableness + '%';
+            document.getElementById('neuroticism-value').textContent = currentPersonality.neuroticism + '%';
+            document.getElementById('formality-value').textContent = currentPersonality.formality + '%';
+            document.getElementById('humor-value').textContent = currentPersonality.humor + '%';
+
+            // Update preview
+            updatePreview();
+        }
+
+        function updatePreview() {
+            let preview = "";
+
+            if (currentPersonality.formality < 30 && currentPersonality.humor > 70) {
+                preview = "Hey there! What chaos shall we organize today? 😄";
+            } else if (currentPersonality.formality > 70 && currentPersonality.humor < 30) {
+                preview = "Good evening. How may I assist you today?";
+            } else if (currentPersonality.conscientiousness > 70) {
+                preview = "Good evening. I've completed a comprehensive analysis and prepared a systematic approach.";
+            } else if (currentPersonality.extraversion > 70) {
+                preview = "Evening! Ready to dive in and make some magic happen?";
+            } else if (currentPersonality.humor > 60) {
+                preview = "Evening! What delightful adventure shall we tackle today?";
+            } else {
+                preview = "Good evening. What would you like me to help with today?";
+            }
+
+            document.getElementById('personalityPreview').textContent = '"' + preview + '"';
+        }
+
+        function savePersonality() {
+            // Save to localStorage
+            localStorage.setItem('jarvisPersonality', JSON.stringify(currentPersonality));
+            alert('Personality settings saved successfully!\n\nJarvis will now use these personality traits in all interactions.');
+            closeSettings();
+        }
+
+        function resetPersonality() {
+            if (confirm('Are you sure you want to reset all personality settings to default values?')) {
+                // Reset all sliders to default values
+                document.getElementById('openness').value = defaultPersonality.openness;
+                document.getElementById('conscientiousness').value = defaultPersonality.conscientiousness;
+                document.getElementById('extraversion').value = defaultPersonality.extraversion;
+                document.getElementById('agreeableness').value = defaultPersonality.agreeableness;
+                document.getElementById('neuroticism').value = defaultPersonality.neuroticism;
+                document.getElementById('formality').value = defaultPersonality.formality;
+                document.getElementById('humor').value = defaultPersonality.humor;
+
+                currentPersonality = {...defaultPersonality};
+                updatePersonality();
+                alert('Personality settings reset to default values.');
+            }
+        }
+
+        // Auto-resize textarea
+        function setupTextarea() {
+            const chatInput = document.getElementById('chatInput');
+            chatInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = this.scrollHeight + 'px';
             });
+
+            chatInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+
+        // Load saved personality
+        function loadSavedPersonality() {
+            const saved = localStorage.getItem('jarvisPersonality');
+            if (saved) {
+                currentPersonality = JSON.parse(saved);
+                // Update sliders
+                document.getElementById('openness').value = currentPersonality.openness;
+                document.getElementById('conscientiousness').value = currentPersonality.conscientiousness;
+                document.getElementById('extraversion').value = currentPersonality.extraversion;
+                document.getElementById('agreeableness').value = currentPersonality.agreeableness;
+                document.getElementById('neuroticism').value = currentPersonality.neuroticism;
+                document.getElementById('formality').value = currentPersonality.formality;
+                document.getElementById('humor').value = currentPersonality.humor;
+                updatePersonality();
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            setupTextarea();
+            loadSavedPersonality();
+            
+            // Add click listeners to suggestion buttons
+            document.getElementById('btn1').addEventListener('click', function() {
+                handleSuggestion('Analyze my day');
+            });
+            
+            document.getElementById('btn2').addEventListener('click', function() {
+                handleSuggestion('What\'s urgent');
+            });
+            
+            document.getElementById('btn3').addEventListener('click', function() {
+                handleSuggestion('Optimize everything');
+            });
+        };
     </script>
 </body>
 </html>
