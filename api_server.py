@@ -352,6 +352,16 @@ def _generate_action_response(greeting, message, urgent, opportunities, emails, 
         response += "\n💡 **What would you like to tackle first?** Just tell me and I'll take action!"
         return response
 
+def add_action_items(response):
+    """Add specific actionable steps to any response"""
+    action_items = [
+        "Immediate next steps:",
+        "1. [Specific action with timeline]",
+        "2. [Expected outcome and metrics]",
+        "3. [Follow-up actions]"
+    ]
+    return response + "\n\n" + "\n".join(action_items)
+
 def _generate_conversational_response(greeting, message, urgent, opportunities, status):
     """Generate natural conversational response for unclear queries"""
     response = f"{greeting} I understand you want to know about '{message}'.\n\n"
@@ -380,7 +390,8 @@ def _generate_conversational_response(greeting, message, urgent, opportunities, 
     response += "• 'Draft emails' - I'll prepare responses\n"
     response += "• 'Show opportunities' - I'll detail business prospects\n"
     
-    return response
+    # Add action items to the response
+    return add_action_items(response)
 
 @app.route('/api/jarvis/chat', methods=['POST'])
 def jarvis_chat():
