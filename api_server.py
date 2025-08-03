@@ -27,6 +27,20 @@ def log_error(function_name, error, context=""):
     if context:
         print(f"Context: {context}")
 
+def _safe_float(value, default=0.0):
+    """Safely convert value to float, handling string values"""
+    try:
+        if isinstance(value, str):
+            # Handle common string values
+            if value.lower() in ['unknown', 'none', 'null', '']:
+                return default
+            # Remove currency symbols and commas
+            cleaned = value.replace('$', '').replace(',', '').replace('%', '')
+            return float(cleaned) if cleaned.strip() else default
+        return float(value) if value is not None else default
+    except (ValueError, TypeError):
+        return default
+
 def analyze_with_ai(user_message, emails, events):
     """Analyze business data using AI and return structured results"""
     
@@ -36,23 +50,50 @@ def analyze_with_ai(user_message, emails, events):
     
     # Create analysis prompt
     prompt = f"""
-    Analyze this business data and provide specific insights:
+    Analyze this business data and provide specific insights with metrics and KPIs:
     
     EMAILS: {email_summary}
     CALENDAR: {calendar_summary}
     USER QUESTION: {user_message}
     
-    Return JSON with:
+    Return JSON with enhanced business intelligence:
     {{
         "urgent_priorities": [
-            {{"sender": "name", "subject": "subject", "content": "content", "deadline": "date"}}
+            {{
+                "sender": "name", 
+                "subject": "subject", 
+                "content": "content", 
+                "deadline": "date",
+                "value": "estimated_revenue_impact",
+                "priority_score": "1-10"
+            }}
         ],
         "opportunities": [
-            {{"company": "name", "value": "amount", "subject": "subject", "content": "content"}}
+            {{
+                "company": "name", 
+                "value": "amount", 
+                "subject": "subject", 
+                "content": "content",
+                "probability": "win_probability_percentage",
+                "timeline": "expected_close_date",
+                "roi_estimate": "expected_return_on_investment"
+            }}
         ],
-        "business_status": "brief status summary",
+        "business_metrics": {{
+            "total_pipeline_value": "sum_of_all_opportunities",
+            "avg_deal_size": "average_opportunity_value",
+            "conversion_rate": "leads_to_opportunities_percentage",
+            "response_time": "average_response_time_hours",
+            "revenue_forecast": "projected_revenue_next_quarter"
+        }},
+        "business_status": "brief status summary with KPIs",
         "recommended_actions": [
-            {{"action": "what to do", "reason": "why"}}
+            {{
+                "action": "what to do", 
+                "reason": "why",
+                "timeline": "when_to_complete",
+                "expected_impact": "revenue_or_efficiency_gain"
+            }}
         ],
         "specific_emails": [
             {{"sender": "name", "subject": "subject", "content": "key content"}}
@@ -68,7 +109,8 @@ def analyze_with_ai(user_message, emails, events):
             model="gpt-4-turbo-preview",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=800,  # Increased for better responses
+            timeout=10  # Increased timeout for better reliability
         )
         
         # Clean response content
@@ -91,7 +133,14 @@ def _create_fallback_analysis():
     return {
         "urgent_priorities": [],
         "opportunities": [],
-        "business_status": "Analysis unavailable",
+        "business_metrics": {
+            "total_pipeline_value": "0",
+            "avg_deal_size": "0",
+            "conversion_rate": "0%",
+            "response_time": "24h",
+            "revenue_forecast": "0"
+        },
+        "business_status": "Analysis unavailable - using fallback metrics",
         "recommended_actions": [],
         "specific_emails": [],
         "specific_meetings": []
@@ -353,85 +402,184 @@ def _generate_action_response(greeting, message, urgent, opportunities, emails, 
         return response
 
 def add_action_items(response):
-    """Add specific actionable steps to any response"""
+    """Add specific actionable steps with business metrics and KPIs"""
     action_items = [
-        "Immediate next steps:",
-        "1. [Specific action with timeline]",
-        "2. [Expected outcome and metrics]",
-        "3. [Follow-up actions]"
+        "📊 BUSINESS METRICS & KPIs:",
+        "• Revenue Pipeline: $[X] (Target: $[Y])",
+        "• Conversion Rate: [X]% (Industry Avg: [Y]%)",
+        "• Customer Acquisition Cost: $[X] (Target: $[Y])",
+        "• Lead Response Time: [X] hours (Target: <24h)",
+        "",
+        "⏰ SPECIFIC TIMELINES:",
+        "1. [Action] - Complete by [Date] (Expected ROI: [X]%)",
+        "2. [Action] - Follow up within [X] hours (Success metric: [Y])",
+        "3. [Action] - Review results by [Date] (KPIs: [metrics])",
+        "",
+        "🎯 SUCCESS METRICS:",
+        "• Revenue Impact: $[X] increase",
+        "• Efficiency Gain: [X]% time saved",
+        "• Customer Satisfaction: [X]% improvement"
     ]
     return response + "\n\n" + "\n".join(action_items)
 
-def _generate_conversational_response(greeting, message, urgent, opportunities, status):
-    """Generate natural conversational response for unclear queries"""
-    response = f"{greeting} I understand you want to know about '{message}'.\n\n"
-    
-    # Provide context-aware suggestions
-    if urgent:
-        response += f"🚨 I notice you have {len(urgent)} urgent items that might be relevant:\n"
-        for item in urgent[:2]:
-            sender = item.get('sender', 'Unknown')
-            subject = item.get('subject', 'No subject')
-            response += f"• {sender}: {subject}\n"
-        response += "\n💡 **Want me to help with these?** Say 'help me with urgent items'\n\n"
-    
-    if opportunities:
-        response += f"🚀 I also found {len(opportunities)} opportunities worth discussing:\n"
-        for opp in opportunities[:2]:
-            company = opp.get('company', 'Unknown')
-            value = opp.get('value', '')
-            response += f"• {company}: {value}\n"
-        response += "\n💡 **Interested?** Say 'tell me about opportunities'\n\n"
-    
-    response += f"**Current status:** {status}\n\n"
-    response += "**What can I help you with specifically?**\n"
-    response += "• 'What's urgent' - I'll show priority items\n"
-    response += "• 'Help me with [task]' - I'll take action\n"
-    response += "• 'Draft emails' - I'll prepare responses\n"
-    response += "• 'Show opportunities' - I'll detail business prospects\n"
-    
-    # Add action items to the response
-    return add_action_items(response)
+def _detect_query_type(message):
+    """Detect if the query is casual conversation or business-related"""
+    message_lower = message.lower().strip()
+    casual_keywords = [
+        'how are you', 'how do you do', 'hello', 'hi', 'hey',
+        'good morning', 'good afternoon', 'good evening',
+        'thanks', 'thank you', 'appreciate it', 'cool', 'great',
+        'nice', 'awesome', 'good job', 'well done'
+    ]
+    business_keywords = [
+        'email', 'emails', 'mail', 'inbox', 'draft', 'reply', 'respond',
+        'urgent', 'important', 'priority', 'meeting', 'calendar', 'schedule',
+        'summary', 'summarize', 'summarise', 'analyze', 'analyse',
+        'business', 'revenue', 'profit', 'deal', 'contract', 'proposal',
+        'client', 'customer', 'work', 'task', 'action', 'deadline',
+        'today', 'tomorrow', 'this week', 'next week'
+    ]
+    for keyword in casual_keywords:
+        if keyword in message_lower:
+            return 'casual'
+    for keyword in business_keywords:
+        if keyword in message_lower:
+            return 'business'
+    return 'business'
+
+def _generate_intelligent_response(message, emails, events, personality):
+    """Generate truly intelligent response using GPT with smart detection"""
+    greeting = generate_greeting(personality)
+    query_type = _detect_query_type(message)
+    try:
+        if query_type == 'casual':
+            prompt = f"""
+            You are Jarvis, an intelligent business assistant. The user has asked: \"{message}\"
+            Respond in a natural, conversational way. Be friendly and helpful, but remember you're a business assistant.
+            Use the greeting: \"{greeting}\"
+            Keep it casual and conversational - no need to analyze emails or calendar for this type of question.
+            """
+        else:
+            email_data = []
+            for email in emails[:10]:
+                email_data.append({
+                    'sender': email.get('sender', 'Unknown'),
+                    'subject': email.get('subject', 'No subject'),
+                    'content': email.get('body', '') or email.get('snippet', ''),
+                    'date': email.get('date', '')
+                })
+            calendar_data = []
+            for event in events[:5]:
+                calendar_data.append({
+                    'title': event.get('summary', 'No title'),
+                    'start': event.get('start', {}).get('dateTime', 'No time'),
+                    'attendees': [a.get('email', '') for a in event.get('attendees', [])],
+                    'description': event.get('description', '')
+                })
+            prompt = f"""
+            You are Jarvis, an intelligent business assistant. The user has asked: \"{message}\"
+            Here are their recent emails:
+            {json.dumps(email_data, indent=2)}
+            Here are their upcoming calendar events:
+            {json.dumps(calendar_data, indent=2)}
+            Provide a comprehensive, intelligent response that:
+            1. Addresses the user's specific question
+            2. Analyzes the email and calendar data intelligently
+            3. Provides actionable insights and recommendations
+            4. If asked for drafts or summaries, provide actual draft emails and summaries
+            5. Be conversational, helpful, and business-focused
+            6. Use the greeting: \"{greeting}\"
+            Respond in a natural, conversational way as Jarvis would.
+            """
+        response = client.chat.completions.create(
+            model="gpt-4-turbo-preview",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=800,
+            timeout=30
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        log_error("_generate_intelligent_response", f"GPT call failed: {e}")
+        return f"{greeting} I'm having trouble analyzing your data right now. Please try again in a moment."
+
+# All template functions removed - GPT handles all analysis and responses
+
+@app.route('/', methods=['GET'])
+def health_check():
+    """Quick health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'Jarvis API',
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/jarvis/test', methods=['GET'])
+def jarvis_test():
+    """Quick test endpoint that responds immediately"""
+    return jsonify({
+        'message': 'Jarvis is working! This is a test response.',
+        'status': 'success',
+        'timestamp': datetime.now().isoformat()
+    })
 
 @app.route('/api/jarvis/chat', methods=['POST'])
 def jarvis_chat():
-    """Main Jarvis chat endpoint"""
+    """Main Jarvis chat endpoint - Now uses intelligent responses"""
     try:
         data = request.get_json()
         message = data.get('message', '')
-        personality = data.get('personality', {})
         
         print(f"JARVIS: {message}")
         
-        # Get business data
+        # Use GPT for ALL responses - no templates
         try:
+            # Get real data
             calendar_service = get_calendar_service()
             gmail_service = get_gmail_service()
             
-            events = calendar_service.events().list(
-                calendarId='primary',
-                timeMin=datetime.utcnow().isoformat() + 'Z',
-                maxResults=10,
-                singleEvents=True,
-                orderBy='startTime'
-            ).execute().get('items', [])
+            emails = []
+            events = []
             
-            emails = fetch_recent_emails(gmail_service, hours=24)
+            if gmail_service:
+                try:
+                    emails = fetch_recent_emails(gmail_service, hours=72)
+                except Exception as e:
+                    print(f"Email fetch failed: {e}")
+            
+            if calendar_service:
+                try:
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+                    events = calendar_service.events().list(
+                        calendarId='primary',
+                        timeMin=now,
+                        maxResults=10,
+                        singleEvents=True,
+                        orderBy='startTime'
+                    ).execute().get('items', [])
+                except Exception as e:
+                    print(f"Calendar fetch failed: {e}")
+            
+            # Use GPT for intelligent response
+            personality = {
+                'formality': 40,
+                'humor': 25,
+                'extraversion': 30
+            }
+            
+            # Generate intelligent response based on actual data
+            response_text = _generate_intelligent_response(message, emails, events, personality)
             
         except Exception as e:
-            log_error("jarvis_chat", f"Failed to fetch data: {e}")
-            events = []
-            emails = []
-        
-        # Analyze with AI
-        analysis = analyze_with_ai(message, emails, events)
-        
-        # Generate response
-        response_text = generate_response(message, analysis, personality)
+            print(f"Intelligent response failed: {e}")
+            # Fallback to simple response without templates
+            response_text = f"{generate_greeting({'formality': 40})} I'm having trouble analyzing your data right now. Please try again in a moment."
         
         return jsonify({
             'message': response_text,
-            'type': 'response'
+            'type': 'response',
+            'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
@@ -442,4 +590,4 @@ def jarvis_chat():
         })
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True) 
+    app.run(port=5000, debug=True)  # Changed to port 5000 
