@@ -7,7 +7,7 @@ import datetime
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import openai
+from anthropic import AnthropicVertex
 from dotenv import load_dotenv
 import base64
 import json
@@ -18,19 +18,25 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from review_framework import ReviewerConfig, ReviewManager
 import asyncio
 import time
-from openai import RateLimitError
 
 # Load environment variables
 load_dotenv()
 
-# Initialize OpenAI
-openai.api_key = os.getenv('OPENAI_API_KEY')
-client = openai.OpenAI() if os.getenv('OPENAI_API_KEY') else None
+# Initialize Vertex AI with Claude Sonnet 4
+PROJECT_ID = os.getenv('GOOGLE_CLOUD_PROJECT_ID')
+REGION = os.getenv('VERTEX_AI_REGION', 'us-east5')
+client = AnthropicVertex(project_id=PROJECT_ID, region=REGION) if PROJECT_ID else None
 
 # Initialize Supabase (if needed)
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+supabase = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"Supabase initialization failed: {e}")
+        supabase = None
 
 # Google API Scopes
 SCOPES = [
@@ -225,13 +231,14 @@ def generate_meeting_brief(event, context=None):
         Provide: Key objectives, Preparation needed, Important points to cover
         """
         
-        response = client.chat.completions.create(
-            model="gpt-4",
+        response = client.messages.create(
+            model="claude-sonnet-4@20250514",
+            max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
         
-        return response.choices[0].message.content
+        return response.content[0].text
     except Exception as e:
         print(f"Error generating meeting brief: {e}")
         return f"Meeting: {event.get('summary', 'No title')} at {event.get('start', 'No time')}"
@@ -258,14 +265,15 @@ def analyze_emails_with_ai(emails):
         Be specific and actionable.
         """
         
-        response = client.chat.completions.create(
-            model="gpt-4",
+        response = client.messages.create(
+            model="claude-sonnet-4@20250514",
+            max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
         
         # Parse the response into structured insights
-        content = response.choices[0].message.content
+        content = response.content[0].text
         insights = []
         
         # Simple parsing - in production would be more sophisticated
@@ -330,12 +338,13 @@ def generate_email_draft(insight_text):
         
         Make it immediately actionable and specific to the opportunity identified.
         """
-        response = client.chat.completions.create(
-            model="gpt-4",
+        response = client.messages.create(
+            model="claude-sonnet-4@20250514",
+            max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
-        return response.choices[0].message.content
+        return response.content[0].text
     except Exception as e:
         print(f"Error generating email draft: {e}")
         return "Draft generation failed."
@@ -355,15 +364,15 @@ def summarize_text(text, max_length=300):
         return text[:max_length]
     try:
         prompt = f"Summarize the following text in {max_length} characters or less, focusing on the most important points:\n{text[:3000]}"
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+        response = client.messages.create(
+            model="claude-3-5-haiku@20241022",
+            max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
-        return response.choices[0].message.content.strip()[:max_length]
-    except RateLimitError:
-        print("Rate limit hit, sleeping for 5 seconds...")
-        time.sleep(5)
+        return response.content[0].text.strip()[:max_length]
+    except Exception as e:
+        print(f"Error summarizing text: {e}")
         return text[:max_length]
     except Exception as e:
         print(f"Error summarizing text: {e}")
@@ -412,12 +421,13 @@ class ChiefOfStaffBrain:
             Executive summary of recent emails:
             {executive_email_summary}
             """
-            response = self.client.chat.completions.create(
-                model="gpt-4",
+            response = self.client.messages.create(
+                model="claude-sonnet-4@20250514",
+                max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7
             )
-            insights = self._parse_insights(response.choices[0].message.content, emails, calendar_events, documents)
+            insights = self._parse_insights(response.content[0].text, emails, calendar_events, documents)
             if not insights:
                 return [{
                     'id': 'no-high-value',

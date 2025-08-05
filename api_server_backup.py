@@ -2,9 +2,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
-from vertex_claude_gcloud import VertexAIClaudeGCloud
 import json
 from datetime import datetime
+from google.cloud import aiplatform
+from vertexai.language_models import TextGenerationModel
 
 # Import Google API functions
 from calendar_assistant import (
@@ -15,11 +16,20 @@ from calendar_assistant import (
 
 # Load environment variables
 load_dotenv()
-PROJECT_ID = os.getenv('GOOGLE_CLOUD_PROJECT_ID')
-REGION = os.getenv('VERTEX_AI_REGION', 'us-east5')
+VERTEX_AI_API_KEY = os.getenv('VERTEX_AI_API_KEY')
 
-# Initialize Vertex AI client with Claude Sonnet 4
-client = VertexAIClaudeGCloud(project_id=PROJECT_ID, region=REGION)
+# Initialize Vertex AI
+if VERTEX_AI_API_KEY:
+    # Set up Vertex AI
+    aiplatform.init(
+        project='your-project-id',  # You'll need to set this
+        location='us-central1'      # You'll need to set this
+    )
+    model = TextGenerationModel.from_pretrained("text-bison@001")
+else:
+    model = None
+    print("Warning: VERTEX_AI_API_KEY not set. Vertex AI features will be disabled.")
+    print("To enable Vertex AI, set VERTEX_AI_API_KEY in your .env file")
 
 app = Flask(__name__)
 CORS(app)
@@ -108,26 +118,14 @@ def analyze_with_ai(user_message, emails, events):
     """
     
     try:
-        response = client.create_message(
-            model="claude-3-7-sonnet",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
-            temperature=0.3
-        )
-        
-        # Clean response content
-        content = response.strip()
+        response = model.predict(prompt)
+        content = response.text.strip()
         if content.startswith('```json'):
             content = content.replace('```json', '').replace('```', '').strip()
         
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            log_error("analyze_with_ai", f"JSON parsing failed: {e}", content[:200])
-            return _create_fallback_analysis()
-            
+        return content
     except Exception as e:
-        log_error("analyze_with_ai", f"API call failed: {e}")
+        log_error("analyze_with_ai", f"AI analysis failed: {e}")
         return _create_fallback_analysis()
 
 def _create_fallback_analysis():
@@ -493,16 +491,15 @@ def _generate_intelligent_response(message, emails, events, personality):
             6. Use the greeting: \"{greeting}\"
             Respond in a natural, conversational way as Jarvis would.
             """
-        response = client.create_message(
-            model="claude-3-7-sonnet",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
-            temperature=0.7
-        )
-        return response.strip()
+        try:
+            response = model.predict(prompt)
+            return response.text.strip()
+        except Exception as e:
+            log_error("_generate_intelligent_response", f"GPT call failed: {e}")
+            return f"{greeting} I'm having trouble analyzing your data right now. Please try again in a moment."
     except Exception as e:
-        log_error("_generate_intelligent_response", f"GPT call failed: {e}")
-        return f"{greeting} I'm having trouble analyzing your data right now. Please try again in a moment."
+        log_error("_generate_intelligent_response", f"Response generation failed: {e}")
+        return f"{greeting} I'm having trouble right now. Please try again."
 
 # All template functions removed - GPT handles all analysis and responses
 

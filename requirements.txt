@@ -1,7 +1,8 @@
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
-openai
+google-cloud-aiplatform
+anthropic[vertex]
 supabase-py
 pync
 python-dotenv
