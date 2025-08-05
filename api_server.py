@@ -530,8 +530,15 @@ def jarvis_chat():
     try:
         data = request.get_json()
         message = data.get('message', '')
+        slack_context = data.get('slack_context', {})
         
-        print(f"JARVIS: {message}")
+        # Log the request
+        if slack_context:
+            user_id = slack_context.get('user_id', 'Unknown')
+            channel_id = slack_context.get('channel_id', 'Unknown')
+            print(f"JARVIS (Slack - {user_id} in {channel_id}): {message}")
+        else:
+            print(f"JARVIS: {message}")
         
         # Use GPT for ALL responses - no templates
         try:

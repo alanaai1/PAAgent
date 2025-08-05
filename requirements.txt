@@ -6,4 +6,6 @@ anthropic[vertex]
 supabase-py
 pync
 python-dotenv
-APScheduler 
+APScheduler
+slack-bolt
+requests 
