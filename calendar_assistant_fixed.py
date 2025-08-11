@@ -370,51 +370,71 @@ import base64
 from email import message_from_bytes
 
 def fetch_recent_emails(service, hours=24):
-    """Fetch recent emails with FULL content"""
+    """Fetch recent emails with FULL content and conversation threading"""
     try:
         # Calculate the time threshold
-    # Calculate the time threshold
-    time_threshold = (datetime.datetime.now() - datetime.timedelta(hours=hours)).strftime('%Y/%m/%d')
+        time_threshold = (datetime.datetime.now() - datetime.timedelta(hours=hours)).strftime('%Y/%m/%d')
         
-    # Search for recent emails
-    query = f'after:{time_threshold}'
-    results = service.users().messages().list(userId='me', q=query, maxResults=50).execute()
-    messages = results.get('messages', [])
+        # Search for recent emails
+        query = f'after:{time_threshold}'
+        results = service.users().messages().list(userId='me', q=query, maxResults=100).execute()
+        messages = results.get('messages', [])
         
-    emails = []
-    for msg in messages[:30]:  # Get more emails
-    try:
-        # Get FULL message content
-    # Get FULL message content
-    message = service.users().messages().get(userId='me', id=msg['id']).execute()
+        emails = []
+        for msg in messages[:60]:  # Get 60 emails instead of 30
+            try:
+                # Get FULL message content with thread info
+                message = service.users().messages().get(userId='me', id=msg['id']).execute()
                 
-    # Extract headers
-    headers = message['payload'].get('headers', [])
-    subject = next((h['value'] for h in headers if h['name'] == 'Subject'), 'No Subject')
-    sender = next((h['value'] for h in headers if h['name'] == 'From'), 'Unknown Sender')
-    date = next((h['value'] for h in headers if h['name'] == 'Date'), '')
+                # Extract headers
+                headers = message['payload'].get('headers', [])
+                subject = next((h['value'] for h in headers if h['name'] == 'Subject'), 'No Subject')
+                sender = next((h['value'] for h in headers if h['name'] == 'From'), 'Unknown Sender')
+                date = next((h['value'] for h in headers if h['name'] == 'Date'), '')
+                thread_id = message.get('threadId', '')
                 
-    # Extract FULL body
-    body = extract_body(message['payload'])
+                # Extract FULL body
+                body = extract_body(message['payload'])
                 
-    emails.append({
-    'id': msg['id'],
-    'subject': subject,
-    'sender': sender,
-    'date': date,
-    'body': body,  # FULL content
-    'body_summary': body[:200] if body else ''  # Keep summary for compatibility
-    })
-    except Exception as e:
-        print(f"Error processing email: {e}")
-    print(f"Error processing email: {e}")
-    continue
+                # Get conversation context if this is part of a thread
+                conversation_context = ""
+                if thread_id:
+                    try:
+                        # Get thread messages for context
+                        thread_messages = service.users().threads().get(userId='me', id=thread_id).execute()
+                        thread_msgs = thread_messages.get('messages', [])
+                        
+                        if len(thread_msgs) > 1:
+                            # Build conversation context from previous messages in thread
+                            context_parts = []
+                            for i, thread_msg in enumerate(thread_msgs[:-1]):  # Exclude current message
+                                thread_headers = thread_msg['payload'].get('headers', [])
+                                thread_sender = next((h['value'] for h in thread_headers if h['name'] == 'From'), 'Unknown')
+                                thread_body = extract_body(thread_msg['payload'])
+                                context_parts.append(f"Previous message from {thread_sender}: {thread_body[:200]}...")
+                            
+                            conversation_context = "\n\n--- Conversation Context ---\n" + "\n".join(context_parts)
+                    except Exception as e:
+                        print(f"Error getting thread context: {e}")
+                
+                emails.append({
+                    'id': msg['id'],
+                    'thread_id': thread_id,
+                    'subject': subject,
+                    'sender': sender,
+                    'date': date,
+                    'body': body,  # FULL content
+                    'body_summary': body[:200] if body else '',  # Keep summary for compatibility
+                    'conversation_context': conversation_context
+                })
+            except Exception as e:
+                print(f"Error processing email: {e}")
+                continue
         
-    return emails
+        return emails
     except Exception as error:
         print(f'Error fetching emails: {error}')
-    print(f'Error fetching emails: {error}')
-    return []
+        return []
 
 def extract_body(payload):
     """Extract full body from email payload"""
@@ -422,20 +442,14 @@ def extract_body(payload):
     
     if 'parts' in payload:
         for part in payload['parts']:
-    for part in payload['parts']:
-        if part['mimeType'] == 'text/plain':
-    if part['mimeType'] == 'text/plain':
-        data = part['body']['data']
-    data = part['body']['data']
-    body += base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-    elif 'parts' in part:
-        body += extract_body(part)
-    body += extract_body(part)
+            if part['mimeType'] == 'text/plain':
+                data = part['body']['data']
+                body += base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+            elif 'parts' in part:
+                body += extract_body(part)
     else:
         if payload['body'].get('data'):
-    if payload['body'].get('data'):
-        body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
-    body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
+            body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
     
     return body
 
@@ -444,11 +458,11 @@ def search_emails(emails, sender=None, topic=None):
     results = []
     for email in emails:
         if sender and sender.lower() not in email['sender'].lower():
-    if sender and sender.lower() not in email['sender'].lower():
-        continue
-    continue
-    if topic and (topic.lower() not in email['subject'].lower() and topic.lower() not in email['body_summary'].lower()):
-        continue
+            continue
+        if topic and (topic.lower() not in email['subject'].lower() and topic.lower() not in email['body_summary'].lower()):
+            continue
+        results.append(email)
+    return results
     continue
     results.append(email)
     return results

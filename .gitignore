@@ -2,3 +2,9 @@
 .env.rtf
 token.pickle
 token_drive.pickle
+token_gmail.pickle
+*.json
+credentials.json
+__pycache__/
+*.pyc
+.env*

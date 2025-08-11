@@ -5,6 +5,9 @@ import os
 from vertex_claude_gcloud import VertexAIClaudeGCloud
 import json
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Import Google API functions
 from calendar_assistant import (
@@ -23,6 +26,60 @@ client = VertexAIClaudeGCloud(project_id=PROJECT_ID, region=REGION)
 
 app = Flask(__name__)
 CORS(app)
+
+def send_email_smtp(to, subject, body):
+    """Send email via SMTP"""
+    try:
+        email_address = os.getenv('GMAIL_ADDRESS')
+        if not email_address:
+            return {
+                'success': False,
+                'error': 'No email address configured',
+                'message': 'Please set GMAIL_ADDRESS in your .env file'
+            }
+        
+        email_password = os.getenv('GMAIL_PASSWORD')
+        if not email_password:
+            return {
+                'success': False,
+                'error': 'No email password configured',
+                'message': 'Please set GMAIL_PASSWORD in your .env file'
+            }
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = email_address
+        msg['To'] = to
+        msg['Subject'] = subject
+        
+        # Add body
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Send email
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(email_address, email_password)
+        text = msg.as_string()
+        server.sendmail(email_address, to, text)
+        server.quit()
+        
+        return {
+            'success': True,
+            'message': f'Email sent successfully to {to}',
+            'method': 'SMTP'
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f'Failed to send email: {str(e)}',
+            'email_details': {
+                'to': to,
+                'subject': subject,
+                'body': body
+            }
+        }
 
 def log_error(function_name, error, context=""):
     """Consistent error logging"""
@@ -540,6 +597,18 @@ def jarvis_chat():
         else:
             print(f"JARVIS: {message}")
         
+        # Check for email sending requests
+        message_lower = message.lower()
+        if any(keyword in message_lower for keyword in ['send email', 'send an email', 'email to', 'send this email']):
+            # Extract email details from the message
+            email_result = _extract_and_send_email(message)
+            if email_result:
+                return jsonify({
+                    'message': email_result,
+                    'type': 'email_sent',
+                    'timestamp': datetime.now().isoformat()
+                })
+        
         # Use GPT for ALL responses - no templates
         try:
             # Get real data
@@ -551,7 +620,7 @@ def jarvis_chat():
             
             if gmail_service:
                 try:
-                    emails = fetch_recent_emails(gmail_service, hours=72)
+                    emails = fetch_recent_emails(gmail_service, hours=168)  # 1 week (168 hours)
                 except Exception as e:
                     print(f"Email fetch failed: {e}")
             
@@ -596,6 +665,113 @@ def jarvis_chat():
             'message': "I'm having trouble right now. Please try again.",
             'type': 'error'
         })
+
+def _extract_and_send_email(message):
+    """Extract email details from message and send email"""
+    try:
+        # Simple email extraction - look for email patterns
+        import re
+        
+        # Find email addresses
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_pattern, message)
+        
+        if not emails:
+            return "I couldn't find an email address in your message. Please include the recipient's email address."
+        
+        to_email = emails[0]
+        
+        # Extract subject and body from the message
+        # Look for common patterns
+        subject = "Message from Jarvis"
+        body = "Hello,\n\nThis is a message sent via Jarvis AI Assistant.\n\nBest regards,\nJarvis"
+        
+        # Try to extract subject and body from the message
+        if "subject:" in message.lower():
+            subject_match = re.search(r'subject:\s*([^\n]+)', message, re.IGNORECASE)
+            if subject_match:
+                subject = subject_match.group(1).strip()
+        
+        # Extract body content
+        if "```" in message:
+            # Extract content between code blocks
+            body_match = re.search(r'```(.*?)```', message, re.DOTALL)
+            if body_match:
+                body = body_match.group(1).strip()
+        else:
+            # Try to extract body after common phrases
+            body_indicators = ['body:', 'content:', 'message:', 'text:']
+            for indicator in body_indicators:
+                if indicator in message.lower():
+                    body_match = re.search(f'{indicator}\\s*(.*)', message, re.IGNORECASE | re.DOTALL)
+                    if body_match:
+                        body = body_match.group(1).strip()
+                        break
+        
+        # Send the email
+        result = send_email_smtp(to_email, subject, body)
+        
+        if result['success']:
+            return f"✅ Email sent successfully to {to_email}!\n\nSubject: {subject}\n\n{body}"
+        else:
+            return f"❌ Failed to send email: {result.get('message', 'Unknown error')}"
+            
+    except Exception as e:
+        return f"❌ Error sending email: {str(e)}"
+
+@app.route('/api/jarvis/send-email', methods=['POST'])
+def send_email_endpoint():
+    """Send an email via Jarvis"""
+    try:
+        data = request.get_json()
+        to = data.get('to', '')
+        subject = data.get('subject', '')
+        body = data.get('body', '')
+
+        if not all([to, subject, body]):
+            return jsonify({
+                'success': False,
+                'message': 'Missing required fields: to, subject, or body'
+            }), 400
+
+        # Send email via SMTP
+        result = send_email_smtp(to, subject, body)
+
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'method': result.get('method', 'SMTP')
+            })
+
+        # Email sending failed, return the error details and draft
+        response = {
+            'success': False,
+            'message': result.get('message', f'Failed to send email to {to}'),
+            'error': result.get('error', 'Unknown error'),
+            'draft': result.get('email_details', {
+                'to': to,
+                'subject': subject,
+                'body': body
+            })
+        }
+
+        # Add formatted template for easy copying
+        response['email_template'] = (
+            f"To: {to}\n"
+            f"Subject: {subject}\n\n"
+            f"{body}\n\n"
+            "---\n"
+            "Sent via Jarvis AI Assistant"
+        )
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Request failed: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)  # Changed to port 5000 
